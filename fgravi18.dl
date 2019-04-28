@@ -1,0 +1,233 @@
+airline("Felix Air").
+airline("MJN Air").
+
+aircraft("Felix Air", "Cessna 172", "ZK-FXO", "light").
+aircraft("MJN Air", "Lockheed McDonnel 3-12", "G-ERTI", "heavy").
+% Only the registration numbers
+planereg(REG) :- aircraft(_,_,REG,_).
+
+rated("light", "clear").
+rated("light", "cloudy").
+% heavy is rated everything that light is rated as well
+rated("heavy", X) :- rated("light", X).
+% plus windy
+rated("heavy", "windy").
+
+% generalising by row and seats on each row
+% since each row is the same
+%
+% I would have generalised based on aircraft model, but different companies
+% may choose to offer different seating arrangements
+%
+% the cessna has 3 seats, 1x2+1
+% G-ERTI has 16 seats, 5x3+1
+% the standard rows:
+row("ZK-FXO", "2").
+row("G-ERTI", "1").
+row("G-ERTI", "2").
+row("G-ERTI", "3").
+row("G-ERTI", "4").
+row("G-ERTI", "5").
+rowseats("ZK-FXO", "A").
+rowseats("ZK-FXO", "B").
+rowseats("G-ERTI", "A").
+rowseats("G-ERTI", "B").
+rowseats("G-ERTI", "C").
+
+% defining the seats on standard rows
+seat(X, A, B) :-
+    row(X, A),
+    rowseats(X, B).
+% cessna has an extra seat in front
+% G-ERTI has an extra seat in the back
+seat("ZK-FXO", "1", "B").
+seat("G-ERTI", "6", "A").
+
+% since each row is the same, we can generalise window seating
+% and adjacent seats per plane
+window("ZK-FXO", "A").
+window("ZK-FXO", "B").
+window("G-ERTI", "A").
+window("G-ERTI", "C").
+aisle("G-ERTI", "B").
+adjacent("ZK-FXO", "A", "B").
+adjacent("G-ERTI", "A", "B").
+% If A is adjacent to B then B is adjacent to A
+adjacent(Planereg, A, B) :-
+    adjacent(Planereg, B, A),
+    A != B.
+
+% defining business seats by rows
+% not business means economy
+business("G-ERTI", "1").
+business("G-ERTI", "2").
+business("ZK-FXO", "1").
+
+airport("AAR", "Aarhus", "Denmark").
+airport("AAL", "Aalborg", "Denmark").
+airport("CPH", "Copenhagen", "Denmark").
+airport("TOM", "Timbuktu", "Mali").
+airport("PAR", "Paris", "France").
+airport("BER", "Berlin", "Germany").
+airport("ZHR", "Zurich", "Switzerland").
+
+weather("AAR", "cloudy").
+weather("AAL", "cloudy").
+weather("CPH", "windy").
+weather("TOM", "clear").
+weather("PAR", "cloudy").
+weather("BER", "clear").
+weather("ZHR", "thunderstorms").
+
+leg("AAR", "AAL", "Felix Air", "ZK-FXO").
+leg("AAR", "CPH", "Felix Air", "ZK-FXO").
+leg("AAL", "CPH", "Felix Air", "ZK-FXO").
+leg("CPH", "BER", "MJN Air", "G-ERTI").
+leg("BER", "ZHR", "MJN Air", "G-ERTI").
+leg("BER", "PAR", "MJN Air", "G-ERTI").
+leg("ZHR", "PAR", "MJN Air", "G-ERTI").
+leg("ZHR", "TOM", "MJN Air", "G-ERTI").
+
+
+info("Passenger1", "First1", "Last1", "Birthday1").
+info("Passenger2", "First2", "Last2", "Birthday2").
+info("Passenger3", "First3", "Last3", "Birthday3").
+info("Passenger4", "First4", "Last4", "Birthday4").
+% Just the ID, needed for variables in negated atoms
+% It would have been possible to just use First, Last and Birthday (assuming unique)
+% But using the unique ID made more sense
+passenger(PID) :-
+    info(PID,_,_,_).
+
+passport("Passenger1", "Denmark").
+passport("Passenger1", "Mali").
+passport("Passenger2", "Switzerland").
+passport("Passenger3", "Germany").
+
+visaagreement("Denmark", "France").
+visaagreement("Denmark", "Germany").
+visaagreement("Germany", "Switzerland").
+% goes both ways
+visaagreement(X,Y):-
+    visaagreement(Y,X),
+    X!=Y.
+
+% France blacklists German people from entering
+blacklist("France", "Germany").
+
+reservation("Res1", "Passenger3", "5", "A", "BER", "PAR", "MJN Air").
+reservation("Res2", "Passenger1", "5", "A", "BER", "PAR", "MJN Air").
+reservation("Res3", "Passenger2", "6", "A", "BER", "PAR", "MJN Air").
+reservation("Res4", "Passenger1", "2", "A", "AAR", "AAL", "Felix Air").
+reservation("Res5", "Passenger2", "2", "B", "AAR", "AAL", "Felix Air").
+reservation("Res6", "Passenger3", "1", "B", "AAR", "AAL", "Felix Air").
+% This is needed to bind variables in negated atoms
+resid(RID) :- reservation(RID,_,_,_,_,_,_).
+
+itinerary("ITI1", "Res1").
+itinerary("ITI1", "Res6").
+itinerary("ITI2", "Res2").
+itinerary("ITI2", "Res4").
+itinerary("ITI3", "Res3").
+itinerary("ITI3", "Res5").
+
+% Problem 3
+% Not taking the blacklist into account yet
+% Either has a passport from the airport's country
+canflyinto(Passenger,Airport) :-
+    passport(Passenger, Country),
+    airport(Airport,AirportName,Country).
+% Or there is a visa agreement between the passport country and airport country
+canflyinto(Passenger,Airport) :-
+    passport(Passenger, CPass),
+    airport(Airport,AirportName,Country),
+    visaagreement(Country,CPass).
+
+% Problem 4
+illegalreservations(Passenger, ID) :-
+    reservation(ID, Passenger, Row, Seat, From, To, Company),
+    leg(From, To, Company, Plane),
+    not canflyinto(Passenger, To).
+
+% Problem 5
+% The problem with this is that it assumes one plane per company per leg
+% If a company has two planes flying on the same leg this doesn't work properly
+% It would be easily fixed by either adding a plane reg number to the reservation
+% or by setting a unique leg id to the legs and using that in the reservations
+doublebooking(From, To, Company, Row, Seat):-
+    reservation(ID1, P1, Row, Seat, From, To, Company),
+    reservation(ID2, P2, Row, Seat, From, To, Company),
+    ID1 != ID2.
+
+% Problem 6
+% two weather variables need to be used since they may be different
+illegalsonboard(From,To,Company) :-
+    reservation(ID, Passenger, Row, Seat, From, To, Company),
+    canflyinto(Passenger, To).
+
+clearedforTO(From, To, Company, Plane) :-
+    leg(From, To, Company, Plane),
+    aircraft(Company, Planename, Plane, Rating),
+    rated(Rating, Weather1),
+    rated(Rating, Weather2),
+    weather(From, Weather1),
+    weather(To, Weather2),
+    not doublebooking(From, To, Company, Row, Seat),
+    seat(Plane, Row, Seat),
+    not illegalsonboard(From, To, Company).
+
+% Problem 7
+% Helper rule that gives the open airports
+openairport(Airp) :-
+    leg(Airp, To, Company, Plane),
+    aircraft(Company, Planename, Plane, Rating),
+    rated(Rating, Weather),
+    weather(Airp, Weather).
+openairport(Airp) :-
+    leg(From, Airp, Company, Plane),
+    aircraft(Company, Planename, Plane, Rating),
+    rated(Rating, Weather),
+    weather(Airp, Weather).
+
+closedairport(Airp) :-
+    airport(Airp, Name, Country),
+    not openairport(Airp).
+
+% Problem 8
+% helper rule that computes legs from From to To with free seats on any plane
+% resid and passenger needed
+% every variable that occurs in a negative atom must also occur in a positive atom
+%
+% as with Problem 5, this does not consider the case where a company uses two planes
+% for the same leg
+freeseatexists(From, To) :-
+    leg(From, To, Company, Plane),
+    seat(Plane, Row, Seat),
+    not reservation(RID, Pas, Row, Seat, From, To, Company),
+    resid(RID),
+    passenger(Pas).
+% base case
+route(Passenger, From, To) :-
+    leg(From, To, Company, Plane),
+    canflyinto(Passenger, To),
+    freeseatexists(From, To).
+% recursion
+route(Passenger, From, To) :-
+    route(Passenger, From, Inbetween),
+    leg(Inbetween, To, Company, Plane),
+    canflyinto(Passenger, To),
+    freeseatexists(From, Inbetween).
+
+% Problem 9
+% Redefine canflyinto to reject people with citizenship in a blacklisted country
+% helper rule since we blacklist a passenger if they are a citizen of a blacklisted 
+% country regardless of other passports
+% could be used in previous exercises instead of canflyinto
+illegal(Passenger, Country) :-
+    passport(Passenger, PPass),
+    blacklist(Country, PPass).
+% now we can expand canflyinto so that the passenger is not illegal
+canflyinto2(Passenger, Airport) :-
+    canflyinto(Passenger, Airport),
+    airport(Airport,AirportName,Country),
+    not illegal(Passenger, Country).
